@@ -34,6 +34,9 @@ city_dlcd_2021 <- "../UGB_forecasts/Data/city_data/citylim_2021/citylim.shp" %>%
     read_sf() %>%
     st_transform(st_crs(dotmap_sf))
 
+harmonized_sf <- "./Data/harmonized_boundaries/county_UGB_city.shp" %>%
+    read_sf()
+
 # need to get geography information separate from census api which is messed up
 # for 2020
 city_census_2020 <- places("OR", year = 2020) %>%
@@ -67,6 +70,24 @@ city_census_count_2020 %>%
 
 city_dlcd_count_2021 <- inst_count_merge(dotmap_sf, city_dlcd_2021)
 ugb_dlcd_count_2021 <- inst_count_merge(dotmap_sf, ugb_dlcd_2021)
+harmonized_count_sf <- inst_count_merge(dotmap_sf, harmonized_sf)
+
+# this should equal 4237256
+sum(harmonized_count_sf$N)
+
+# none of these should be different
+harmonized_count_sf %>%
+    as_tibble() %>%
+    group_by(GEOID, COUNTY) %>%
+    summarise(N = sum(N), .groups = "drop") %>%
+    left_join(
+        county_census_count_2020 %>%
+            as_tibble() %>%
+            select(GEOID, value),
+        by = "GEOID"
+    ) %>%
+    mutate(diff = value - N) %>%
+    filter(diff != 0)
 
 city_dlcd_count_2021 %>%
     as_tibble() %>%
@@ -87,3 +108,13 @@ county_census_count_2020 %>%
     as_tibble() %>%
     select(COUNTY_NAME = NAME, Population = N) %>%
     write_csv("Data/diagnostic_tables/county_census_population.csv")
+
+st_write(
+    harmonized_count_sf,
+    "./Data/harmonized_boundaries/county_UGB_city.shp",
+    delete_layer = TRUE)
+
+harmonized_count_sf %>%
+    as_tibble() %>%
+    select(-geometry) %>%
+    write_csv("./Data/harmonized_boundaries/harmonized_boundaries.csv")
